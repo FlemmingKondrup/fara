@@ -169,7 +169,7 @@ Run the test script to see Fara in action:
 python test_fara_agent.py --task "how many pages does wikipedia have" --start_page "https://www.bing.com" --endpoint_config endpoint_configs/azure_foundry_config.json [--headful] [--downloads_folder "/path/to/downloads"] [--save_screenshots] [--max_rounds 100] [--browserbase]
 ```
 
-The `client_config` points to `"base_url": "http://localhost:5000/v1"` from the VLLM server above.
+In self-hosting scenario the `endpoint_config` points to `endpoint_configs/vllm_config.json` from the VLLM server above.
 
 If you set `--browserbase`, export environment variables for the API key and project ID.
 
