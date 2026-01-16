@@ -27,6 +27,8 @@ def add_om2w_args(parser):
     parser.add_argument('--eval_data_url', type=str, default=DEFAULT_DATA_URL, help='Azure URI to the evaluation data')
     parser.add_argument('--split', type=str, default='*')
     parser.add_argument('--eval_method', type=str, default='WebJudge_Online_Mind2Web_eval', help='Evaluation method (default: WebJudge_Online_Mind2Web_eval, one of: AgentTrek_eval, Autonomous_eval, WebJudge_general_eval, WebJudge_Online_Mind2Web_eval)')
+    parser.add_argument('--task_ids', type=str, default=None, help='Comma-separated list of task IDs to filter to (e.g., "task1,task2,task3")')  # Add this
+
 
 
 def main():
@@ -92,13 +94,20 @@ def main():
         mlflow.log_param("eval_data", args.eval_data_url)
         mlflow.log_param("eval_model", args.eval_model)
         mlflow.log_param("eval_method", args.eval_method)
+
+        task_ids = None
+        if args.task_ids:
+            task_ids = [tid.strip() for tid in args.task_ids.split(',')]
+            mlflow.log_param('task_ids', args.task_ids)
+            mlflow.log_param('num_filtered_tasks', len(task_ids))
+            
         data_dir = Path(__file__).resolve().parent.parent / "data" / "om2w"
         data_dir.mkdir(parents=True, exist_ok=True)
         benchmark = OnlineM2WBenchmark(
             data_dir=data_dir,
             eval_method = args.eval_method,
             data_az_url = args.eval_data_url,
-            model_client = GracefulRetryClient.from_path(args.eval_oai_config, logger=logger, eval_model=args.eval_model))
+            model_client = GracefulRetryClient.from_path(args.eval_oai_config, logger=logger, eval_model=args.eval_model), task_ids=task_ids)
 
         mlflow.log_param('subsample', args.subsample)
         mlflow.log_param('processes', args.processes)
