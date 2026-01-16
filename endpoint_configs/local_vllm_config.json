@@ -1,0 +1,5 @@
+{
+  "model": "Qwen/Qwen3-VL-2B-Thinking",
+  "base_url": "http://localhost:5000/v1",
+  "api_key": "not-needed"
+}
