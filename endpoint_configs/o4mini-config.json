@@ -1,0 +1,14 @@
+{
+  "CHAT_COMPLETION_PROVIDER": "openai",
+  "CHAT_COMPLETION_KWARGS_JSON": {
+    "model": "o4-mini",
+    "api_key": "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",
+    "base_url": "https://api.openai.com/v1",
+    "model_capabilities": {
+      "function_calling": true,
+      "json_output": true,
+      "vision": true
+    },
+    "max_retries": 5
+  }
+}
