@@ -285,8 +285,26 @@ class FaraAgent:
     def _parse_thoughts_and_action(self, message: str) -> Tuple[str, Dict[str, Any]]:
         try:
             tmp = message.split("<tool_call>\n")
+            if len(tmp) < 2:
+                # Model response doesn't contain <tool_call> tag
+                print(f"[DEBUG] ERROR: Model response missing <tool_call> tag")
+                print(f"[DEBUG] Message length: {len(message)}")
+                print(f"[DEBUG] Message (first 1000 chars): {message[:1000]}")
+                print(f"[DEBUG] Message (last 500 chars): {message[-500:]}")
+                self.logger.error(
+                    f"Model response missing <tool_call> tag. Full message: {message[:2000]}"
+                )
+                raise ValueError(
+                    f"Model response does not contain <tool_call> tag. "
+                    f"Message preview: {message[:500]}..."
+                )
+            
             thoughts = tmp[0].strip()
             action_text = tmp[1].split("\n</tool_call>")[0]
+            
+            if not action_text.strip():
+                raise ValueError("Empty action text found inside <tool_call> tags")
+            
             try:
                 print(f"[DEBUG] action_text: {action_text}")
                 action = json.loads(action_text)
@@ -298,7 +316,7 @@ class FaraAgent:
             return thoughts, action
         except Exception as e:
             self.logger.error(
-                f"Error parsing thoughts and action: {message}", exc_info=True
+                f"Error parsing thoughts and action: {message[:2000]}", exc_info=True
             )
             raise e
 
@@ -458,12 +476,12 @@ class FaraAgent:
                     f"Raw response (first 500 chars): {raw_response[:500]}"
                 )
             action = action_args["action"]
-
+            
             # Recreate function_call with normalized action_dict (after transformation)
             # This ensures execute_action receives the correct structure
             action_dict["arguments"]["thoughts"] = thoughts
             function_call = [FunctionCall(id="dummy", **action_dict)]
-
+            
             self.logger.debug(
                 f"\nThought #{i+1}: {thoughts}\nAction #{i+1}: executing tool '{action}' with arguments {json.dumps(action_args)}"
             )
