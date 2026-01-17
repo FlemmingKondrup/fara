@@ -419,6 +419,26 @@ class FaraAgent:
             all_actions.append(raw_response)
             thoughts, action_dict = self._parse_thoughts_and_action(raw_response)
             
+            # ADD: Normalize action_dict format - if name is not "computer_use", wrap it
+            if action_dict.get("name") != "computer_use":
+                # Model returned action name directly (e.g., "visit_url"), wrap it properly
+                original_name = action_dict.get("name")
+                original_args = action_dict.get("arguments", {})
+                
+                # Create properly formatted action_dict
+                action_dict = {
+                    "name": "computer_use",
+                    "arguments": {
+                        "action": original_name,
+                        **original_args  # Include all original arguments (url, coordinate, etc.)
+                    }
+                }
+                
+                # ADD: Debug print for transformation
+                if i == 0:
+                    print(f"[DEBUG] Transformed action_dict from '{original_name}' to computer_use format: {action_dict}")
+                    sys.stdout.flush()
+            
             # ADD: Debug print to see what was parsed
             if i == 0:
                 print(f"[DEBUG] Parsed action_dict: {action_dict}")
