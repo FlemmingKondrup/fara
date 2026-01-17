@@ -265,6 +265,8 @@ class WebSurferSystem(BaseSystem):
 
 
             # look at the output dir for any file that looks like screenshot{i}.png where i is an integer and nothing else
+            print(f"[DEBUG] Looking for screenshot files in {output_dir}")
+            sys.stdout.flush()
             screenshot_files = [f for f in os.listdir(output_dir) if f.startswith("screenshot") and f.endswith(".png")]
             # Use regex to ensure we only match files with the exact pattern "screenshot{i}.png" where i is an integer
             screenshot_pattern = re.compile(r"^screenshot(\d+)\.png$")
@@ -272,12 +274,20 @@ class WebSurferSystem(BaseSystem):
             screenshot_files.sort(key=lambda x: int(screenshot_pattern.match(x).group(1)))
             # Store the full absolute paths to the screenshot files
             final_answer_store.screenshots = screenshot_files #[os.path.abspath(os.path.join(output_dir, f)) for f in screenshot_files]
-        
+            print(f"[DEBUG] Found {len(screenshot_files)} screenshot files")
+            sys.stdout.flush()
 
+            print(f"[DEBUG] About to save final_answer_store")
+            sys.stdout.flush()
             final_answer_store.save(os.path.join(output_dir, f"{question_id}_final_answer.json"))
+            print(f"[DEBUG] Saved final_answer_store, now calling load_answer_from_disk")
+            sys.stdout.flush()
 
-            return self.load_answer_from_disk(question_id, output_dir)
-
+            result = self.load_answer_from_disk(question_id, output_dir)
+            print(f"[DEBUG] load_answer_from_disk completed, returning result")
+            sys.stdout.flush()
+            return result
+            
         log_file = os.path.join(output_dir, "web_surfer.log")    # TODO: use a different mechanism for recording taken actions and use logger for logs
         logger = logger or logging.getLogger("WebSurferLogger")
         handler = LogHandler(filename=log_file)
@@ -299,4 +309,5 @@ class WebSurferSystem(BaseSystem):
         if (self.web_surfer_kwargs is not None) and any(self.web_surfer_kwargs.values()):
             return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}-{dict_2_str(surfer_args)}'   # TODO: incorporate other hyperparameters?
         return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}--{self.save_env_state}'
+
 
