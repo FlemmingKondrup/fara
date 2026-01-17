@@ -458,6 +458,12 @@ class FaraAgent:
                     f"Raw response (first 500 chars): {raw_response[:500]}"
                 )
             action = action_args["action"]
+
+            # Recreate function_call with normalized action_dict (after transformation)
+            # This ensures execute_action receives the correct structure
+            action_dict["arguments"]["thoughts"] = thoughts
+            function_call = [FunctionCall(id="dummy", **action_dict)]
+
             self.logger.debug(
                 f"\nThought #{i+1}: {thoughts}\nAction #{i+1}: executing tool '{action}' with arguments {json.dumps(action_args)}"
             )
