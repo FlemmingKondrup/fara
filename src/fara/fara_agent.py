@@ -558,8 +558,8 @@ class FaraAgent:
         if "coordinate" in args:
             args["coordinate"] = self.proc_coords(
                 args["coordinate"],
-                self._mlm_width,
-                self._mlm_height,
+                1000,#self._mlm_width,
+                1000,#self._mlm_height,
                 self.viewport_width,
                 self.viewport_height,
             )
