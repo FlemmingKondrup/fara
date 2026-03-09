@@ -56,7 +56,8 @@ class OnlineM2WBenchmark(Benchmark):
                 eval_method = 'AgentTrek_eval',
                 model_client: Optional[ChatCompletionClient] = None,
                 data_az_url: Optional[str] = None,
-                score_threshold: float = 3):
+                score_threshold: float = 3,
+                task_ids: Optional[List[str]] = None):
         self.eval_method = eval_method
         self.original_model_client = model_client
         self.model_client = _ModelWrapper(model_client)
@@ -68,6 +69,7 @@ class OnlineM2WBenchmark(Benchmark):
             data_dir=data_dir)
         self.data_az_url = "Online_Mind2Web_06042025.json" if data_az_url is None else data_az_url
         self.score_threshold = score_threshold
+        self.task_ids = task_ids
 
     def download_dataset(self) -> None:
         print("Updated datasets for om2w are stored locally in webeval/data/om2w")
@@ -134,15 +136,21 @@ class OnlineM2WBenchmark(Benchmark):
     def get_split_examples(self, split: str) -> List[Dict[str, Any]]:
         exs = None
         if split == 'easy':
-            return [ex for ex in self.examples if ex["level"] == "easy"]
+            exs = [ex for ex in self.examples if ex["level"] == "easy"]
         elif split == 'medium':
-            return [ex for ex in self.examples if ex["level"] == "medium"]
+            exs = [ex for ex in self.examples if ex["level"] == "medium"]
         elif split == 'hard':
-            return [ex for ex in self.examples if ex["level"] == "hard"]
+            exs = [ex for ex in self.examples if ex["level"] == "hard"]
         elif split == '*':
-            return self.examples
-        
-        raise ValueError(f"Unsupported split: {split}")
+            exs = self.examples
+        else:
+            raise ValueError(f"Unsupported split: {split}")
+
+        # Filter by task_ids if specified
+        if self.task_ids is not None:
+            exs = [ex for ex in exs if ex["id"] in self.task_ids]
+
+        return exs
     
     def compute_aggregate_metrics(self, results: List[Any]) -> Dict[str, float]:
         # Build a mapping from id to level for all examples

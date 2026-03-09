@@ -146,6 +146,13 @@ class WebSurferSystem(BaseSystem):
                 start_page = "https://www.bing.com"
 
             question_text = example_data.get("question", "")
+            
+            # ADD: Print diagnostic info
+            print(f"[DEBUG] Starting get_answer for task {question_id}")
+            print(f"[DEBUG] Start page: {start_page}")
+            print(f"[DEBUG] Question: {question_text[:100]}...")  # First 100 chars
+            import sys
+            sys.stdout.flush()
 
             # Config for the local OpenAI-compatible server
             if not self.websurfer_client_cfg:
@@ -168,6 +175,10 @@ class WebSurferSystem(BaseSystem):
                     client_config = self.websurfer_client_cfg
                 else:
                     raise ValueError("Invalid websurfer_client_cfg type, must be a valid config with model, base_url, api_key fields")
+            
+            # ADD: Print client config info
+            print(f"[DEBUG] Client config: model={client_config.get('model')}, base_url={client_config.get('base_url')}")
+            sys.stdout.flush()
 
                 # Resolve any environment variable references (e.g. "$GEMINI_API_KEY")
                 for key in client_config:
@@ -184,6 +195,10 @@ class WebSurferSystem(BaseSystem):
 
             # Create the FaraAgent instance
             for _ in range(1):
+                # ADD: Print before browser initialization
+                print(f"[DEBUG] Initializing browser manager...")
+                sys.stdout.flush()
+                
                 # Initialize browser manager
                 browser_manager = BrowserBB(
                     headless=True,
@@ -199,6 +214,10 @@ class WebSurferSystem(BaseSystem):
                     use_browser_base=self.use_browserbase,
                     logger=logger
                 )
+                
+                # ADD: Print after browser manager created
+                print(f"[DEBUG] Browser manager created")
+                sys.stdout.flush()
 
                 agent = FaraAgent(
                     browser_manager=browser_manager,
@@ -206,15 +225,52 @@ class WebSurferSystem(BaseSystem):
                     start_page=start_page,
                     downloads_folder=output_dir,
                     save_screenshots=True,
-                    max_rounds=100,
+                    max_rounds=self.max_rounds,
                     logger = logger
                 )
+                
+                # ADD: Print before agent initialization
+                print(f"[DEBUG] Created FaraAgent, now initializing...")
+                sys.stdout.flush()
 
-                await agent.initialize()
+                try:
+                    await agent.initialize()
+                    # ADD: Print after initialization
+                    print(f"[DEBUG] FaraAgent initialized successfully")
+                    print(f"[DEBUG] Page URL: {agent._page.url if hasattr(agent, '_page') and agent._page else 'N/A'}")
+                    sys.stdout.flush()
+                except Exception as e:
+                    print(f"[DEBUG] ERROR during agent.initialize(): {e}")
+                    print(f"[DEBUG] Exception type: {type(e).__name__}")
+                    import traceback
+                    traceback.print_exc()
+                    sys.stdout.flush()
+                    raise
+                
                 logging.info(f"Initialized FaraAgent with start page: {start_page}")
                 print(f"Running task: {question_text}")
                 print("----------------------------------------")
-                final_answer, all_actions, all_observations = await agent.run(question_text)
+                sys.stdout.flush()
+                
+                # ADD: Print before agent.run()
+                print(f"[DEBUG] About to call agent.run() with max_rounds={agent.max_rounds}")
+                sys.stdout.flush()
+                
+                try:
+                    final_answer, all_actions, all_observations = await agent.run(question_text)
+                    # ADD: Print after agent.run() completes
+                    print(f"[DEBUG] agent.run() completed successfully")
+                    print(f"[DEBUG] Final answer: {final_answer[:100] if final_answer else 'None'}...")
+                    print(f"[DEBUG] Number of actions: {len(all_actions)}")
+                    sys.stdout.flush()
+                except Exception as e:
+                    print(f"[DEBUG] ERROR during agent.run(): {e}")
+                    print(f"[DEBUG] Exception type: {type(e).__name__}")
+                    import traceback
+                    traceback.print_exc()
+                    sys.stdout.flush()
+                    raise
+                
                 final_answer_store.final_answer = final_answer
                 break  # Exit the retry loop if successful
                 # Close the agent and browser
@@ -222,6 +278,8 @@ class WebSurferSystem(BaseSystem):
 
 
             # look at the output dir for any file that looks like screenshot{i}.png where i is an integer and nothing else
+            print(f"[DEBUG] Looking for screenshot files in {output_dir}")
+            sys.stdout.flush()
             screenshot_files = [f for f in os.listdir(output_dir) if f.startswith("screenshot") and f.endswith(".png")]
             # Use regex to ensure we only match files with the exact pattern "screenshot{i}.png" where i is an integer
             screenshot_pattern = re.compile(r"^screenshot(\d+)\.png$")
@@ -229,12 +287,20 @@ class WebSurferSystem(BaseSystem):
             screenshot_files.sort(key=lambda x: int(screenshot_pattern.match(x).group(1)))
             # Store the full absolute paths to the screenshot files
             final_answer_store.screenshots = screenshot_files #[os.path.abspath(os.path.join(output_dir, f)) for f in screenshot_files]
-        
+            print(f"[DEBUG] Found {len(screenshot_files)} screenshot files")
+            sys.stdout.flush()
 
+            print(f"[DEBUG] About to save final_answer_store")
+            sys.stdout.flush()
             final_answer_store.save(os.path.join(output_dir, f"{question_id}_final_answer.json"))
+            print(f"[DEBUG] Saved final_answer_store, now calling load_answer_from_disk")
+            sys.stdout.flush()
 
-            return self.load_answer_from_disk(question_id, output_dir)
-
+            result = self.load_answer_from_disk(question_id, output_dir)
+            print(f"[DEBUG] load_answer_from_disk completed, returning result")
+            sys.stdout.flush()
+            return result
+            
         log_file = os.path.join(output_dir, "web_surfer.log")    # TODO: use a different mechanism for recording taken actions and use logger for logs
         logger = logger or logging.getLogger("WebSurferLogger")
         handler = LogHandler(filename=log_file)
@@ -256,3 +322,5 @@ class WebSurferSystem(BaseSystem):
         if (self.web_surfer_kwargs is not None) and any(self.web_surfer_kwargs.values()):
             return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}-{dict_2_str(surfer_args)}'   # TODO: incorporate other hyperparameters?
         return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}--{self.save_env_state}'
+
+

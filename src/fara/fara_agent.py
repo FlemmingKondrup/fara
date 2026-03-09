@@ -285,10 +285,30 @@ class FaraAgent:
     def _parse_thoughts_and_action(self, message: str) -> Tuple[str, Dict[str, Any]]:
         try:
             tmp = message.split("<tool_call>\n")
+            if len(tmp) < 2:
+                # Model response doesn't contain <tool_call> tag
+                print(f"[DEBUG] ERROR: Model response missing <tool_call> tag")
+                print(f"[DEBUG] Message length: {len(message)}")
+                print(f"[DEBUG] Message (first 1000 chars): {message[:1000]}")
+                print(f"[DEBUG] Message (last 500 chars): {message[-500:]}")
+                self.logger.error(
+                    f"Model response missing <tool_call> tag. Full message: {message[:2000]}"
+                )
+                raise ValueError(
+                    f"Model response does not contain <tool_call> tag. "
+                    f"Message preview: {message[:500]}..."
+                )
+            
             thoughts = tmp[0].strip()
             action_text = tmp[1].split("\n</tool_call>")[0]
+            
+            if not action_text.strip():
+                raise ValueError("Empty action text found inside <tool_call> tags")
+            
             try:
+                print(f"[DEBUG] action_text: {action_text}")
                 action = json.loads(action_text)
+                print(f"[DEBUG] action: {action}")
             except json.decoder.JSONDecodeError:
                 self.logger.error(f"Invalid action text: {action_text}")
                 action = ast.literal_eval(action_text)
@@ -296,7 +316,7 @@ class FaraAgent:
             return thoughts, action
         except Exception as e:
             self.logger.error(
-                f"Error parsing thoughts and action: {message}", exc_info=True
+                f"Error parsing thoughts and action: {message[:2000]}", exc_info=True
             )
             raise e
 
@@ -330,14 +350,31 @@ class FaraAgent:
 
     async def run(self, user_message: str) -> Tuple:
         """Run the agent with a user message."""
+        # ADD: Print at start of run()
+        print(f"[DEBUG] FaraAgent.run() called with message: {user_message[:100]}...")
+        import sys
+        sys.stdout.flush()
+        
         # Initialize if not already done
         await self.initialize()
+        
+        # ADD: Print after initialize check
+        print(f"[DEBUG] After initialize check, page is: {'ready' if self._page is not None else 'None'}")
+        sys.stdout.flush()
 
         # Ensure page is ready after initialization
         assert self._page is not None, "Page should be initialized"
 
+        # ADD: Print before getting screenshot
+        print(f"[DEBUG] Getting initial screenshot...")
+        sys.stdout.flush()
+        
         # Get initial screenshot and add user message with image to chat history
         scaled_screenshot = await self._get_scaled_screenshot()
+        
+        # ADD: Print after screenshot
+        print(f"[DEBUG] Got screenshot, size: {scaled_screenshot.size if scaled_screenshot else 'None'}")
+        sys.stdout.flush()
 
         if self.save_screenshots:
             await self._playwright_controller.get_screenshot(
@@ -358,8 +395,19 @@ class FaraAgent:
         all_observations = []
         final_answer = "<no_answer>"
         is_stop_action = False
+        
+        # ADD: Print before loop starts
+        print(f"[DEBUG] Starting action loop with max_rounds={self.max_rounds}")
+        sys.stdout.flush()
+        
         for i in range(self.max_rounds):
             is_first_round = i == 0
+            
+            # ADD: Print at start of each iteration
+            if i == 0:
+                print(f"[DEBUG] Starting iteration {i+1}, about to check captcha...")
+                sys.stdout.flush()
+            
             if not self.browser_manager._captcha_event.is_set():
                 self.logger.info("Waiting 60s for captcha to finish...")
                 captcha_solved = await self.wait_for_captcha_with_timeout(60)
@@ -371,14 +419,69 @@ class FaraAgent:
                         "Captcha timed out, unable to proceed with web surfing."
                     )
 
+            # ADD: Print before model call
+            if i == 0:
+                print(f"[DEBUG] About to make first model call (generate_model_call)...")
+                sys.stdout.flush()
+
             function_call, raw_response = await self.generate_model_call(
                 is_first_round, scaled_screenshot if is_first_round else None
             )
+            
+            # ADD: Print after model call
+            if i == 0:
+                print(f"[DEBUG] First model call completed, response length: {len(raw_response) if raw_response else 0}")
+                print(f"[DEBUG] Raw response (first 1000 chars): {raw_response[:1000] if raw_response else 'None'}")
+                sys.stdout.flush()
             assert isinstance(raw_response, str)
             all_actions.append(raw_response)
             thoughts, action_dict = self._parse_thoughts_and_action(raw_response)
+            
+            # ADD: Normalize action_dict format - if name is not "computer_use", wrap it
+            if action_dict.get("name") != "computer_use":
+                # Model returned action name directly (e.g., "visit_url"), wrap it properly
+                original_name = action_dict.get("name")
+                original_args = action_dict.get("arguments", {})
+                
+                # Create properly formatted action_dict
+                action_dict = {
+                    "name": "computer_use",
+                    "arguments": {
+                        "action": original_name,
+                        **original_args  # Include all original arguments (url, coordinate, etc.)
+                    }
+                }
+                
+                # ADD: Debug print for transformation
+                if i == 0:
+                    print(f"[DEBUG] Transformed action_dict from '{original_name}' to computer_use format: {action_dict}")
+                    sys.stdout.flush()
+            
+            # ADD: Debug print to see what was parsed
+            if i == 0:
+                print(f"[DEBUG] Parsed action_dict: {action_dict}")
+                print(f"[DEBUG] action_dict keys: {list(action_dict.keys()) if isinstance(action_dict, dict) else 'Not a dict'}")
+                sys.stdout.flush()
+            
             action_args = action_dict.get("arguments", {})
+            if not action_args or "action" not in action_args:
+                # ADD: Better error message with full context
+                print(f"[DEBUG] ERROR: action_dict structure is invalid")
+                print(f"[DEBUG] action_dict: {action_dict}")
+                print(f"[DEBUG] action_args: {action_args}")
+                print(f"[DEBUG] raw_response (first 500 chars): {raw_response[:500]}")
+                sys.stdout.flush()
+                raise KeyError(
+                    f"Expected 'arguments.action' in parsed action_dict, but got structure: {action_dict}. "
+                    f"Raw response (first 500 chars): {raw_response[:500]}"
+                )
             action = action_args["action"]
+            
+            # Recreate function_call with normalized action_dict (after transformation)
+            # This ensures execute_action receives the correct structure
+            action_dict["arguments"]["thoughts"] = thoughts
+            function_call = [FunctionCall(id="dummy", **action_dict)]
+            
             self.logger.debug(
                 f"\nThought #{i+1}: {thoughts}\nAction #{i+1}: executing tool '{action}' with arguments {json.dumps(action_args)}"
             )
@@ -455,8 +558,8 @@ class FaraAgent:
         if "coordinate" in args:
             args["coordinate"] = self.proc_coords(
                 args["coordinate"],
-                self._mlm_width,
-                self._mlm_height,
+                1000,#self._mlm_width,
+                1000,#self._mlm_height,
                 self.viewport_width,
                 self.viewport_height,
             )
@@ -603,3 +706,4 @@ class FaraAgent:
         if self._page is not None:
             self._page = None
         await self.browser_manager.close()
+

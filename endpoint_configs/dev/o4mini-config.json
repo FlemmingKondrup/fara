@@ -1,0 +1,14 @@
+{
+  "CHAT_COMPLETION_PROVIDER": "openai",
+  "CHAT_COMPLETION_KWARGS_JSON": {
+    "model": "o4-mini",
+    "api_key": "",
+    "base_url": "https://api.openai.com/v1",
+    "model_capabilities": {
+      "function_calling": true,
+      "json_output": true,
+      "vision": true
+    },
+    "max_retries": 5
+  }
+}
