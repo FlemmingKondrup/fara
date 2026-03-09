@@ -180,18 +180,18 @@ class WebSurferSystem(BaseSystem):
             print(f"[DEBUG] Client config: model={client_config.get('model')}, base_url={client_config.get('base_url')}")
             sys.stdout.flush()
 
-                # Resolve any environment variable references (e.g. "$GEMINI_API_KEY")
-                for key in client_config:
-                    val = client_config[key]
-                    if isinstance(val, str) and val.startswith("$"):
-                        env_var = val[1:]
-                        resolved = os.environ.get(env_var)
-                        if resolved is None:
-                            raise RuntimeError(
-                                f"Environment variable '{env_var}' referenced in config is not set. "
-                                f"Please set it with: export {env_var}=<your-value>"
-                            )
-                        client_config[key] = resolved
+            # Resolve any environment variable references (e.g. "$GEMINI_API_KEY")
+            for key in client_config:
+                val = client_config[key]
+                if isinstance(val, str) and val.startswith("$"):
+                    env_var = val[1:]
+                    resolved = os.environ.get(env_var)
+                    if resolved is None:
+                        raise RuntimeError(
+                            f"Environment variable '{env_var}' referenced in config is not set. "
+                            f"Please set it with: export {env_var}=<your-value>"
+                        )
+                    client_config[key] = resolved
 
             # Create the FaraAgent instance
             for _ in range(1):
