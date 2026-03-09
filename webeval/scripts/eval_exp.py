@@ -59,6 +59,24 @@ def get_default_vllm_model_config(model_port):
     }
     return default_vllm_model_config
 
+def _resolve_env_vars(value: str) -> str:
+    """Resolve environment variable references in config values.
+    
+    If a value starts with '$', treat it as an environment variable name
+    and resolve it. E.g. "$GEMINI_API_KEY" -> os.environ["GEMINI_API_KEY"].
+    """
+    if isinstance(value, str) and value.startswith("$"):
+        env_var_name = value[1:]
+        resolved = os.environ.get(env_var_name)
+        if resolved is None:
+            raise RuntimeError(
+                f"Environment variable '{env_var_name}' referenced in config is not set. "
+                f"Please set it with: export {env_var_name}=<your-value>"
+            )
+        return resolved
+    return value
+
+
 def get_foundry_endpoint_configs(endpoint_config_path: str) -> List[Dict]:
     endpoint_path = Path(endpoint_config_path).resolve()
     if endpoint_path.is_dir():
@@ -72,6 +90,9 @@ def get_foundry_endpoint_configs(endpoint_config_path: str) -> List[Dict]:
             with open(config_file, 'r') as f:
                 config = json.load(f)
                 assert "model" in config and "base_url" in config and "api_key" in config, f"Config file {config_file} is missing required fields: model, base_url, api_key"
+                # Resolve environment variable references in config values
+                for key in config:
+                    config[key] = _resolve_env_vars(config[key])
                 assert config["api_key"], f"API key in config file {config_file} is empty"
                 websurfer_client_cfg.append(config)
     except Exception as e:

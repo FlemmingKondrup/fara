@@ -169,6 +169,19 @@ class WebSurferSystem(BaseSystem):
                 else:
                     raise ValueError("Invalid websurfer_client_cfg type, must be a valid config with model, base_url, api_key fields")
 
+                # Resolve any environment variable references (e.g. "$GEMINI_API_KEY")
+                for key in client_config:
+                    val = client_config[key]
+                    if isinstance(val, str) and val.startswith("$"):
+                        env_var = val[1:]
+                        resolved = os.environ.get(env_var)
+                        if resolved is None:
+                            raise RuntimeError(
+                                f"Environment variable '{env_var}' referenced in config is not set. "
+                                f"Please set it with: export {env_var}=<your-value>"
+                            )
+                        client_config[key] = resolved
+
             # Create the FaraAgent instance
             for _ in range(1):
                 # Initialize browser manager
