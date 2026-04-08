@@ -82,6 +82,7 @@ def run_single_task(question_data: tuple, _logger = None) -> tuple:
 
     try:
         start_time = time.time()
+        print(f"⭐ [{time.strftime('%H:%M:%S')}] Task {question_id}: calling get_answer (this is where hangs usually happen)...", flush=True)
         answer = _GLOBAL_SYSTEM.get_answer(question_id, example_data, question_dir, _logger)
         end_time = time.time()
         times_path = os.path.join(question_dir, "times.json")
@@ -604,10 +605,12 @@ def run_eval_single_example(example, folder, redo_eval, progress, task_id, eval_
 
         # Skip execution if eval_only is True
         if not eval_only:
+            print(f"⭐ [{time.strftime('%H:%M:%S')}] STARTING execution for task {example['id']} (attempt {retry_count + 1}/{max_error_task_retries + 1})", flush=True)
             run_single_task(task, _logger)
             progress[task_id] = {'progress': 1, 'total': 2}
 
         example_data = (example, folder, redo_eval)
+        print(f"⭐ [{time.strftime('%H:%M:%S')}] Task {example['id']}: execution done, starting EVALUATION now", flush=True)
         result = evaluate_single_example(example_data, _logger)
 
         if eval_only:
