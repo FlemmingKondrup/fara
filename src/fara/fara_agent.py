@@ -433,6 +433,14 @@ class FaraAgent:
                 print(f"[DEBUG] First model call completed, response length: {len(raw_response) if raw_response else 0}")
                 print(f"[DEBUG] Raw response (first 1000 chars): {raw_response[:1000] if raw_response else 'None'}")
                 sys.stdout.flush()
+            # If model response couldn't be parsed, skip this round (no action taken, env unchanged)
+            if function_call is None:
+                self.logger.warning(f"Round {i+1}: Model response could not be parsed. Skipping action and continuing.")
+                print(f"\n[Round {i+1}] Model response could not be parsed into a valid action. No action taken, retrying...")
+                all_actions.append(raw_response or "[NO_RESPONSE]")
+                all_observations.append("No action taken due to malformed model response.")
+                continue
+
             assert isinstance(raw_response, str)
             all_actions.append(raw_response)
             thoughts, action_dict = self._parse_thoughts_and_action(raw_response)
@@ -532,11 +540,14 @@ class FaraAgent:
         message = response.content
 
         self._chat_history.append(AssistantMessage(content=message))
-        thoughts, action = self._parse_thoughts_and_action(message)
-        action["arguments"]["thoughts"] = thoughts
-
-        function_call = [FunctionCall(id="dummy", **action)]
-        return function_call, message
+        try:
+            thoughts, action = self._parse_thoughts_and_action(message)
+            action["arguments"]["thoughts"] = thoughts
+            function_call = [FunctionCall(id="dummy", **action)]
+            return function_call, message
+        except (ValueError, KeyError, json.JSONDecodeError) as e:
+            self.logger.warning(f"Failed to parse model response into a valid action: {e}")
+            return None, message
 
     async def execute_action(
         self,
