@@ -1108,7 +1108,7 @@
     {
         "task_id": "16200f51d63f0a47a58fa17acd49e368",
         "confirmed_task": "Find a recipe that includes eggplant and mushrooms.",
-        "website": "https://cookpad.com/",
+        "website": "https://cookpad.com/us",
         "reference_length": 3,
         "level": "easy"
     },
@@ -1227,7 +1227,7 @@
     {
         "task_id": "a69d2934fe54fef165490a5a2d95bf38",
         "confirmed_task": "Show me recipes for pancakes with wheat and without beetroot.",
-        "website": "https://cookpad.com/",
+        "website": "https://cookpad.com/us",
         "reference_length": 6,
         "level": "medium"
     },
@@ -1332,7 +1332,7 @@
     {
         "task_id": "0632e496d37badee0350dad358f047c5",
         "confirmed_task": "Browse recipes for gluten-free chocolate chip cookies that can be made without nuts.",
-        "website": "https://cookpad.com/",
+        "website": "https://cookpad.com/us",
         "reference_length": 4,
         "level": "easy"
     },
