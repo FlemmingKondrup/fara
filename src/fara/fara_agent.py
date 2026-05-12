@@ -6,7 +6,7 @@ import ast
 import io
 import os
 from PIL import Image
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from urllib.parse import quote_plus
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
@@ -57,6 +57,7 @@ class FaraAgent:
         max_rounds: int = 10,
         save_screenshots: bool = False,
         logger: logging.Logger | None = None,
+        model_image_size: Optional[Tuple[int, int]] = None,
     ):
         self.downloads_folder = downloads_folder
         if not os.path.exists(self.downloads_folder or "") and self.downloads_folder:
@@ -74,6 +75,7 @@ class FaraAgent:
         if save_screenshots and self.downloads_folder is None:
             assert False, "downloads_folder must be set if save_screenshots is True"
         self.save_screenshots = save_screenshots
+        self.model_image_size = model_image_size
         self._facts = []
         self._task_summary = None
         self._num_actions = 0
@@ -263,14 +265,22 @@ class FaraAgent:
     def _get_system_message(
         self, screenshot: ImageObj | Image.Image
     ) -> Tuple[List[SystemMessage], Image.Image]:
+        pil = screenshot.image if isinstance(screenshot, ImageObj) else screenshot
         system_prompt_info = get_computer_use_system_prompt(
-            screenshot,
+            pil,
             self.MLM_PROCESSOR_IM_CFG,
             include_input_text_key_args=self.include_input_text_key_args,
             fn_call_template=self.fn_call_template,
+            fixed_im_size=self.model_image_size,
         )
         self._mlm_width, self._mlm_height = system_prompt_info["im_size"]
-        scaled_screenshot = screenshot.resize((self._mlm_width, self._mlm_height))
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = Image.LANCZOS
+        scaled_screenshot = pil.resize(
+            (self._mlm_width, self._mlm_height), resample=resample
+        )
 
         system_message = []
         for msg in system_prompt_info["conversation"]:

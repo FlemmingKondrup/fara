@@ -235,19 +235,29 @@ def get_computer_use_system_prompt(
     processor_im_cfg,
     include_input_text_key_args=False,
     fn_call_template="default",
+    fixed_im_size: Union[Tuple[int, int], None] = None,
 ):
-    patch_size = processor_im_cfg["patch_size"]
-    merge_size = processor_im_cfg["merge_size"]
-    min_pixels = processor_im_cfg["min_pixels"]
-    max_pixels = processor_im_cfg["max_pixels"]
+    """Build computer-use system prompt and target image size.
 
-    resized_height, resized_width = smart_resize(
-        image.height,
-        image.width,
-        factor=patch_size * merge_size,
-        min_pixels=min_pixels,
-        max_pixels=max_pixels,
-    )
+    If ``fixed_im_size`` is ``(width, height)``, that size is used for the
+    screenshot passed to the model and for ``display_*_px`` in tool config.
+    Otherwise sizes come from ``smart_resize`` (aspect-preserving).
+    """
+    if fixed_im_size is not None:
+        resized_width, resized_height = fixed_im_size
+    else:
+        patch_size = processor_im_cfg["patch_size"]
+        merge_size = processor_im_cfg["merge_size"]
+        min_pixels = processor_im_cfg["min_pixels"]
+        max_pixels = processor_im_cfg["max_pixels"]
+
+        resized_height, resized_width = smart_resize(
+            image.height,
+            image.width,
+            factor=patch_size * merge_size,
+            min_pixels=min_pixels,
+            max_pixels=max_pixels,
+        )
 
     computer_use = FaraComputerUse(
         cfg={

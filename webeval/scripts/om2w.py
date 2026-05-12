@@ -88,6 +88,7 @@ def main():
             gpt_solver_model_name=args.gpt_solver_model_name,
             fn_call_template=args.fn_call_template,
             step_budgets=args.step_budgets,
+            model_image_size=(896, 896),
         )
 
 

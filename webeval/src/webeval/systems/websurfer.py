@@ -70,7 +70,8 @@ class WebSurferSystem(BaseSystem):
         gpt_solver_model_name: Optional[str] = None, # used for gpt_solver to specify the model name
         fn_call_template: str = "default",
         step_budgets: List[int] = None,
-        save_env_state: bool = False
+        save_env_state: bool = False,
+        model_image_size: Optional[Tuple[int, int]] = None,
     ) -> None:
         super().__init__(system_name)
         self.web_surfer_model_type = web_surfer_model_type
@@ -86,6 +87,7 @@ class WebSurferSystem(BaseSystem):
 
         ### add a bool to save env_state
         self.save_env_state=save_env_state
+        self.model_image_size = model_image_size
 
         if not step_budgets:
             self.step_budgets = [
@@ -226,7 +228,8 @@ class WebSurferSystem(BaseSystem):
                     downloads_folder=output_dir,
                     save_screenshots=True,
                     max_rounds=self.max_rounds,
-                    logger = logger
+                    logger = logger,
+                    model_image_size=self.model_image_size,
                 )
                 
                 # ADD: Print before agent initialization
@@ -319,8 +322,11 @@ class WebSurferSystem(BaseSystem):
     def hash(self) -> str:
         surfer_args = {
             k: v for k, v in self.web_surfer_kwargs.items() if k in {'max_n_images'}}    # TODO: cleanup
+        base = f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}'
+        if self.model_image_size is not None:
+            base += f"-im{self.model_image_size[0]}x{self.model_image_size[1]}"
         if (self.web_surfer_kwargs is not None) and any(self.web_surfer_kwargs.values()):
-            return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}-{dict_2_str(surfer_args)}'   # TODO: incorporate other hyperparameters?
-        return f'{super().hash()}-{self.web_surfer_model_type}-{self.max_rounds}--{self.save_env_state}'
+            return f'{base}-{dict_2_str(surfer_args)}'   # TODO: incorporate other hyperparameters?
+        return f'{base}--{self.save_env_state}'
 
 
