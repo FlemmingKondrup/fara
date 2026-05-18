@@ -230,6 +230,32 @@ def smart_resize(
     return h_bar, w_bar
 
 
+def _normalize_fixed_im_size(
+    width: int,
+    height: int,
+    factor: int,
+    min_pixels: int,
+    max_pixels: int,
+) -> tuple[int, int]:
+    """Snap explicit (width, height) to the vision grid and processor pixel bounds.
+
+    Hosted inference often requires height and width divisible by ``factor``
+    (e.g. patch_size × merge_size). Passing e.g. 960×960 breaks mm prompt
+    placement with factor 28; nearest valid square is 952×952.
+    """
+    w_bar = max(factor, round_by_factor(width, factor))
+    h_bar = max(factor, round_by_factor(height, factor))
+    if h_bar * w_bar > max_pixels:
+        beta = math.sqrt((h_bar * w_bar) / max_pixels)
+        h_bar = floor_by_factor(h_bar / beta, factor)
+        w_bar = floor_by_factor(w_bar / beta, factor)
+    elif h_bar * w_bar < min_pixels:
+        beta = math.sqrt(min_pixels / (h_bar * w_bar))
+        h_bar = ceil_by_factor(h_bar * beta, factor)
+        w_bar = ceil_by_factor(w_bar * beta, factor)
+    return w_bar, h_bar
+
+
 def get_computer_use_system_prompt(
     image,
     processor_im_cfg,
@@ -241,20 +267,26 @@ def get_computer_use_system_prompt(
 
     If ``fixed_im_size`` is ``(width, height)``, that size is used for the
     screenshot passed to the model and for ``display_*_px`` in tool config.
-    Otherwise sizes come from ``smart_resize`` (aspect-preserving).
+    Dimensions are snapped to the processor patch grid and min/max pixels
+    (same constraints as ``smart_resize``). Otherwise sizes come from
+    ``smart_resize`` (aspect-preserving from the screenshot).
     """
-    if fixed_im_size is not None:
-        resized_width, resized_height = fixed_im_size
-    else:
-        patch_size = processor_im_cfg["patch_size"]
-        merge_size = processor_im_cfg["merge_size"]
-        min_pixels = processor_im_cfg["min_pixels"]
-        max_pixels = processor_im_cfg["max_pixels"]
+    patch_size = processor_im_cfg["patch_size"]
+    merge_size = processor_im_cfg["merge_size"]
+    min_pixels = processor_im_cfg["min_pixels"]
+    max_pixels = processor_im_cfg["max_pixels"]
+    factor = patch_size * merge_size
 
+    if fixed_im_size is not None:
+        req_w, req_h = fixed_im_size
+        resized_width, resized_height = _normalize_fixed_im_size(
+            req_w, req_h, factor, min_pixels, max_pixels
+        )
+    else:
         resized_height, resized_width = smart_resize(
             image.height,
             image.width,
-            factor=patch_size * merge_size,
+            factor=factor,
             min_pixels=min_pixels,
             max_pixels=max_pixels,
         )

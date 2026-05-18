@@ -71,7 +71,7 @@ class WebSurferSystem(BaseSystem):
         fn_call_template: str = "default",
         step_budgets: List[int] = None,
         save_env_state: bool = False,
-        model_image_size: Optional[Tuple[int, int]] = None,
+        model_image_size: Optional[Tuple[int, int]] = (896, 896),
     ) -> None:
         super().__init__(system_name)
         self.web_surfer_model_type = web_surfer_model_type

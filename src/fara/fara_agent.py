@@ -57,7 +57,7 @@ class FaraAgent:
         max_rounds: int = 10,
         save_screenshots: bool = False,
         logger: logging.Logger | None = None,
-        model_image_size: Optional[Tuple[int, int]] = None,
+        model_image_size: Optional[Tuple[int, int]] = (896, 896),
     ):
         self.downloads_folder = downloads_folder
         if not os.path.exists(self.downloads_folder or "") and self.downloads_folder:
