@@ -44,6 +44,11 @@ def _get_base_eval_arg_parser():
     parser.add_argument("--model_url", type=str, default=None, help="Path to model on either disk or an Azure blobstore if you intend to host the model LOCALLY via vllm")
     parser.add_argument('--model_endpoint', type=str, default=None, help='Path to EXTERNAL Foundry endpoint config JSON file (or directory of configs). If specified, uses external hosted model instead of local vllm. Similar to --endpoint_config in test_fara_agent.py')
     parser.add_argument("--out_url", type=str, default=EvalExp.DEFAULT_OUT, help=f"Output URL, default: {EvalExp.DEFAULT_OUT}")
+    parser.add_argument(
+        "--flat_out",
+        action="store_true",
+        help="Write outputs directly under --out_url (traj/ and eval folders) instead of the nested runs/<system>/<model>/<user>/<benchmark>/<run_id>/ layout",
+    )
     parser.add_argument("--user", type=str, default=None, help="User name, default: local user name")
     parser.add_argument("--run_id", type=str, default=None, help="run id")
     parser.add_argument("--subsample", type=float, default=1.0, help="Subsample ratio for evaluation")

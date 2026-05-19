@@ -689,6 +689,12 @@ class FaraAgent:
                 if new_page_tentative is not None:
                     self._page = new_page_tentative
                     self._prior_metadata_hash = None
+            else:
+                await self._playwright_controller.type_at_focus(
+                    self._page,
+                    text_value,
+                    delete_existing_text=delete_existing_text,
+                )
 
         elif args["action"] == "pause_and_memorize_fact":
             fact = str(args.get("fact"))

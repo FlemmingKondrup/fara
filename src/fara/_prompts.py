@@ -31,6 +31,7 @@ Use a mouse and keyboard to interact with a computer, and take screenshots.
 * Make sure to click any buttons, links, icons, etc with the cursor tip in the center of the element. Don't click boxes on their edges unless asked.
 * When a separate scrollable container prominently overlays the webpage, if you want to scroll within it, you typically need to mouse_move() over it first and then scroll().
 * If a popup window appears that you want to close, if left_click() on the 'X' or close button doesn't work, try key(keys=['Escape']) to close it.
+* After left_click() on an input field, you can type() without a coordinate to enter text into that focused field (Enter is not pressed automatically). Alternatively, type() with a coordinate clicks the field and types in one step.
 * On some search bars, when you type(), you may need to press_enter=False and instead separately call left_click() on the search button to submit the search query. This is especially true of search bars that have auto-suggest popups for e.g. locations
 * For calendar widgets, you usually need to left_click() on arrows to move between months and left_click() on dates to select them; type() is not typically used to input dates there.
 """.strip()
@@ -41,7 +42,7 @@ Use a mouse and keyboard to interact with a computer, and take screenshots.
                 "description": """
 The action to perform. The available actions are:
 * `key`: Performs key down presses on the arguments passed in order, then performs key releases in reverse order. Includes "Enter", "Alt", "Shift", "Tab", "Control", "Backspace", "Delete", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageDown", "PageUp", "Shift", etc.
-* `type`: Type a string of text on the keyboard.
+* `type`: Type a string of text on the keyboard. Omit `coordinate` to type into the currently focused field (e.g. after a prior left_click); include `coordinate` to click and type in one step.
 * `mouse_move`: Move the cursor to a specified (x, y) pixel coordinate on the screen.
 * `left_click`: Click the left mouse button.
 * `scroll`: Performs a scroll of the mouse scroll wheel.
@@ -84,7 +85,7 @@ The action to perform. The available actions are:
                 "type": "boolean",
             },
             "coordinate": {
-                "description": "(x, y): The x (pixels from the left edge) and y (pixels from the top edge) coordinates to move the mouse to. Required only by `action=left_click`, `action=mouse_move`, and `action=type`.",
+                "description": "(x, y): The x (pixels from the left edge) and y (pixels from the top edge) coordinates to move the mouse to. Required by `action=left_click` and `action=mouse_move`. Optional for `action=type` (omit when typing into an already-focused field).",
                 "type": "array",
             },
             "pixels": {

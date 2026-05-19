@@ -547,6 +547,30 @@ class PlaywrightController:
 
         return new_page
 
+    @handle_target_closed()
+    async def type_at_focus(
+        self,
+        page: Page,
+        value: str,
+        delete_existing_text: bool = False,
+    ) -> None:
+        """Type into the currently focused element without clicking or pressing Enter."""
+        await self._ensure_page_ready(page)
+
+        if delete_existing_text:
+            await page.keyboard.press("ControlOrMeta+A")
+            await page.keyboard.press("Backspace")
+
+        if len(value) < 100:
+            delay_typing_speed = 50 + 100 * random.random()
+        else:
+            delay_typing_speed = 10
+
+        try:
+            await page.keyboard.type(value)
+        except PlaywrightError:
+            await page.keyboard.type(value, delay=delay_typing_speed)
+
     async def keypress(self, page: Page, keys: list[str]) -> None:
         """
         Press specified keys in sequence.

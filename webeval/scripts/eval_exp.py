@@ -192,7 +192,7 @@ class EvalExp:
         """Clean MLflow keys by replacing unsupported characters, Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), colon(:) and slashes (/)."""
         return ''.join(c if c.isalnum() or c in ['_', '-', '.', ' ', ':', '/'] else '_' for c in key)[:250]
 
-    def run(self, model_ref, system, benchmark, out_url, subsample = 1.0, redo_eval = False, run_id = '0', split = None, processes = -1, callbacks = None,  eval_only = False, max_error_task_retries = 0):
+    def run(self, model_ref, system, benchmark, out_url, subsample = 1.0, redo_eval = False, run_id = '0', split = None, processes = -1, callbacks = None,  eval_only = False, max_error_task_retries = 0, flat_out = False):
         # out_az = AzFolder.from_uri(out_url)
         out_context = Path(out_url).expanduser()
         model_ref.log_2_mlflow()
@@ -227,10 +227,16 @@ class EvalExp:
 
             mlflow.log_param("total examples", len(examples))
             original_run_id = run_id
-            run_id = f'runs/{system.hash()}/{model_ref.model_prefix}/{self.user}/{benchmark.exec_hash()}/{run_id or 0}'
-
-            mlflow.log_param('run_id', run_id)
-            output_folder = out_context / run_id
+            if flat_out:
+                nested_run_id = f'runs/{system.hash()}/{model_ref.model_prefix}/{self.user}/{benchmark.exec_hash()}/{run_id or 0}'
+                output_folder = out_context
+                mlflow.log_param('run_id', str(output_folder))
+                mlflow.log_param('flat_out', True)
+                mlflow.log_param('nested_run_id', nested_run_id)
+            else:
+                run_id = f'runs/{system.hash()}/{model_ref.model_prefix}/{self.user}/{benchmark.exec_hash()}/{run_id or 0}'
+                mlflow.log_param('run_id', run_id)
+                output_folder = out_context / run_id
             (output_folder / benchmark.eval_hash()).mkdir(parents=True, exist_ok=True)
             (output_folder / 'traj').mkdir(parents=True, exist_ok=True)
             callback = Callback(callbacks = callbacks or [])

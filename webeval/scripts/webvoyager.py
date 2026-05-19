@@ -102,6 +102,7 @@ def main():
         mlflow.log_param('subsample', args.subsample)
         mlflow.log_param('processes', args.processes)
         mlflow.log_param('max_error_task_retries', args.max_error_task_retries)
+        mlflow.log_param('flat_out', args.flat_out)
         experiment.run(
             model_ref = model_ref,
             system = system,
@@ -114,7 +115,8 @@ def main():
             processes = args.processes,
             callbacks = [Callback()],
             eval_only = args.eval_only,
-            max_error_task_retries = args.max_error_task_retries)
+            max_error_task_retries = args.max_error_task_retries,
+            flat_out = args.flat_out)
 
 
 if __name__ == "__main__":
