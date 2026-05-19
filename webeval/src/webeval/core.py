@@ -102,6 +102,37 @@ def run_single_task(question_data: tuple, _logger = None) -> tuple:
         return question_id, None, 0
 
 
+def _result_from_execution(qid: str, question_dir: str, _logger) -> EvalResult:
+    """Build an EvalResult from a completed agent run, without WebJudge scoring."""
+    global _GLOBAL_SYSTEM
+    times_path = os.path.join(question_dir, "times.json")
+    duration = 0
+    if os.path.exists(times_path):
+        with open(times_path, "r") as f:
+            duration = json.load(f).get("duration", 0)
+    try:
+        candidate = _GLOBAL_SYSTEM.load_answer_from_disk(qid, question_dir)
+    except Exception as e:
+        _logger.error(f"[Execution {qid}] Error loading execution result: {e}", exc_info=True)
+        return EvalResult(qid=qid, score=None, duration=duration, stage=Stage.INIT)
+    if candidate is None or candidate.is_aborted:
+        _logger.warning(f"[Execution {qid}] Trajectory missing or aborted")
+        return EvalResult(qid=qid, score=None, duration=duration, stage=Stage.EXECUTED)
+    return EvalResult(
+        qid=qid,
+        score=None,
+        duration=duration,
+        stage=Stage.EXECUTED,
+        answer=candidate.answer.final_answer,
+    )
+
+
+def _run_succeeded(result: EvalResult, skip_eval: bool) -> bool:
+    if skip_eval:
+        return result.stage == Stage.EXECUTED and result.answer is not None
+    return result.stage == Stage.EVALUATED
+
+
 # ----------------------------------------------------------------------
 # Core Functions
 # ----------------------------------------------------------------------
@@ -564,7 +595,7 @@ def run_evaluate_benchmark_func(
         redo_eval,
     )
 
-def run_eval_single_example(example, folder, redo_eval, progress, task_id, eval_only=False, max_error_task_retries=0, callback=None):
+def run_eval_single_example(example, folder, redo_eval, progress, task_id, eval_only=False, skip_eval=False, max_error_task_retries=0, callback=None):
     """
     Run evaluation for a single example with retry logic.
 
@@ -576,12 +607,15 @@ def run_eval_single_example(example, folder, redo_eval, progress, task_id, eval_
         task_id: Task ID for progress tracking.
         max_error_task_retries (int, optional): Maximum number of retries for failed/aborted tasks.
         eval_only (bool, optional): Skip execution and only evaluate existing results.
+        skip_eval (bool, optional): Run agent trajectories only; skip LLM-as-a-judge evaluation.
         callback (callable, optional): Callback to report results. If None, returns list of all results for multiprocessing.
 
     Returns:
         EvalResult or list[EvalResult]: Single result if callback provided, otherwise list of all attempts.
     """
     if eval_only:
+        progress[task_id] = {'progress': 0, 'total': 1}
+    elif skip_eval:
         progress[task_id] = {'progress': 0, 'total': 1}
     else:
         progress[task_id] = {'progress': 0, 'total': 2}
@@ -607,54 +641,57 @@ def run_eval_single_example(example, folder, redo_eval, progress, task_id, eval_
         if not eval_only:
             print(f"⭐ [{time.strftime('%H:%M:%S')}] STARTING execution for task {example['id']} (attempt {retry_count + 1}/{max_error_task_retries + 1})", flush=True)
             run_single_task(task, _logger)
-            progress[task_id] = {'progress': 1, 'total': 2}
+            if not skip_eval:
+                progress[task_id] = {'progress': 1, 'total': 2}
 
-        example_data = (example, folder, redo_eval)
-        print(f"⭐ [{time.strftime('%H:%M:%S')}] Task {example['id']}: execution done, starting EVALUATION now", flush=True)
-        result = evaluate_single_example(example_data, _logger)
+        if skip_eval and not eval_only:
+            print(f"⭐ [{time.strftime('%H:%M:%S')}] Task {example['id']}: execution done, skipping evaluation", flush=True)
+            result = _result_from_execution(example["id"], question_dir, _logger)
+        else:
+            example_data = (example, folder, redo_eval)
+            print(f"⭐ [{time.strftime('%H:%M:%S')}] Task {example['id']}: execution done, starting EVALUATION now", flush=True)
+            result = evaluate_single_example(example_data, _logger)
 
         if eval_only:
             progress[task_id] = {'progress': 1, 'total': 1}
             return result
 
+        if skip_eval:
+            progress[task_id] = {'progress': 1, 'total': 1}
 
-        # Check if the task succeeded (has EVALUATED stage with score)
-        if result.stage == Stage.EVALUATED:
-            # Task succeeded with evaluation
-            progress[task_id] = {'progress': 2, 'total': 2}
+        # Check if the task succeeded
+        if _run_succeeded(result, skip_eval):
+            if not skip_eval:
+                progress[task_id] = {'progress': 2, 'total': 2}
             if callback:
-                # Single-process mode: report immediately and return single result
                 callback(result)
                 return result
-            else:
-                # Multiprocessing mode: collect and return all results (including any prior failures)
-                all_results.append(result)
-                return all_results if len(all_results) > 1 else result
+            all_results.append(result)
+            return all_results if len(all_results) > 1 else result
 
         # Task failed or aborted
         if retry_count < max_error_task_retries:
             _logger.warning(f"[Execution {example['id']}] Task failed, aborted, or not evaluated (stage={result.stage}). Retrying...")
             if callback:
-                # Single-process mode: report intermediate failure immediately
                 callback(result)
             else:
-                # Multiprocessing mode: collect for later reporting
                 all_results.append(result)
-            # Reset progress for retry
-            progress[task_id] = {'progress': 0, 'total': 2}
+            if skip_eval:
+                progress[task_id] = {'progress': 0, 'total': 1}
+            else:
+                progress[task_id] = {'progress': 0, 'total': 2}
             retry_count += 1
         else:
-            # Max retries reached
             _logger.error(f"[Execution {example['id']}] Max retries ({max_error_task_retries}) reached. Task failed with stage={result.stage}.")
-            progress[task_id] = {'progress': 2, 'total': 2}
+            if skip_eval:
+                progress[task_id] = {'progress': 1, 'total': 1}
+            else:
+                progress[task_id] = {'progress': 2, 'total': 2}
             if callback:
-                # Single-process mode: report and return single result
                 callback(result)
                 return result
-            else:
-                # Multiprocessing mode: return all attempts
-                all_results.append(result)
-                return all_results if len(all_results) > 1 else result
+            all_results.append(result)
+            return all_results if len(all_results) > 1 else result
             
 
 def _make_callback_wrapper(callback):
@@ -687,7 +724,7 @@ class _SeqPool:
     def join(self):
         ...
 
-def run_eval_multiple_examples(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only =False, max_error_task_retries=0):
+def run_eval_multiple_examples(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only =False, skip_eval=False, max_error_task_retries=0):
     pool_class = _SeqPool if processes == 1 else multiprocessing.Pool
     pool = pool_class(processes=processes, initializer = init_eval_worker,  initargs=(None, benchmark, system))
     async_results = []
@@ -702,14 +739,14 @@ def run_eval_multiple_examples(examples, processes, output_folder, redo_eval, sy
         async_results.append(
             pool.apply_async(
                 run_eval_single_example,
-                args=(example, output_folder, redo_eval, {}, 0, eval_only, max_error_task_retries, worker_callback),
+                args=(example, output_folder, redo_eval, {}, 0, eval_only, skip_eval, max_error_task_retries, worker_callback),
                 callback=async_callback))
     pool.close()
     pool.join()
     return callback.results
 
 
-def _run_eval_multiple_examples_with_progress_single_proc(examples, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, max_error_task_retries=0):
+def _run_eval_multiple_examples_with_progress_single_proc(examples, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, skip_eval=False, max_error_task_retries=0):
     global _GLOBAL_SYSTEM, _GLOBAL_BENCHMARK
     _GLOBAL_BENCHMARK = benchmark
     _GLOBAL_SYSTEM = system
@@ -717,12 +754,12 @@ def _run_eval_multiple_examples_with_progress_single_proc(examples, output_folde
         task = progress.add_task('Starting...', total=len(examples))
         for example in examples:
             progress.update(task, description = example['id'])
-            run_eval_single_example(example, output_folder, redo_eval, {}, 0, eval_only, max_error_task_retries, callback)
+            run_eval_single_example(example, output_folder, redo_eval, {}, 0, eval_only, skip_eval, max_error_task_retries, callback)
             progress.update(task, advance=1)
     return callback.results
 
 
-def _run_eval_multiple_examples_with_progress_multi_proc(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, max_error_task_retries=0):
+def _run_eval_multiple_examples_with_progress_multi_proc(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, skip_eval=False, max_error_task_retries=0):
     pool = multiprocessing.Pool(processes=processes, initializer = init_eval_worker,  initargs=(None, benchmark, system))
     async_results = []
 
@@ -745,7 +782,7 @@ def _run_eval_multiple_examples_with_progress_multi_proc(examples, processes, ou
             async_results.append(
                 pool.apply_async(
                     run_eval_single_example,
-                    args=(example, output_folder, redo_eval, _progress, task_id, eval_only, max_error_task_retries, None),
+                    args=(example, output_folder, redo_eval, _progress, task_id, eval_only, skip_eval, max_error_task_retries, None),
                     callback=wrapped_callback))
         while (n_finished := sum([future.ready() for future in async_results])) < len(async_results):
             progress.update(
@@ -766,13 +803,13 @@ def _run_eval_multiple_examples_with_progress_multi_proc(examples, processes, ou
     pool.join()
     return callback.results
 
-def run_eval_multiple_examples_with_progress(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, max_error_task_retries=0):
+def run_eval_multiple_examples_with_progress(examples, processes, output_folder, redo_eval, system, benchmark, callback = None, eval_only=False, skip_eval=False, max_error_task_retries=0):
     output_folder = output_folder / 'traj'
     output_folder.mkdir(parents=True, exist_ok=True)
     if processes == 1:
         return _run_eval_multiple_examples_with_progress_single_proc(
-            examples, output_folder, redo_eval, system, benchmark, callback, eval_only, max_error_task_retries
+            examples, output_folder, redo_eval, system, benchmark, callback, eval_only, skip_eval, max_error_task_retries
         )
     return _run_eval_multiple_examples_with_progress_multi_proc(
-        examples, processes, output_folder, redo_eval, system, benchmark, callback, eval_only, max_error_task_retries
+        examples, processes, output_folder, redo_eval, system, benchmark, callback, eval_only, skip_eval, max_error_task_retries
     )

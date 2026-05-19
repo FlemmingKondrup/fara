@@ -33,7 +33,8 @@ def add_om2w_args(parser):
 
 def main():
     args = get_eval_args(add_om2w_args)
-    assert args.eval_model == "o4-mini", "only o4-mini can be used for om2w eval"
+    if not args.skip_eval:
+        assert args.eval_model == "o4-mini", "only o4-mini can be used for om2w eval"
 
     if args.browserbase:
         assert os.environ.get("BROWSERBASE_API_KEY"), "BROWSERBASE_API_KEY environment variable must be set to use browserbase"
@@ -93,8 +94,10 @@ def main():
 
 
         mlflow.log_param("eval_data", args.eval_data_url)
-        mlflow.log_param("eval_model", args.eval_model)
-        mlflow.log_param("eval_method", args.eval_method)
+        mlflow.log_param("skip_eval", args.skip_eval)
+        if not args.skip_eval:
+            mlflow.log_param("eval_model", args.eval_model)
+            mlflow.log_param("eval_method", args.eval_method)
 
         task_ids = None
         if args.task_ids:
@@ -104,11 +107,17 @@ def main():
             
         data_dir = Path(__file__).resolve().parent.parent / "data" / "om2w"
         data_dir.mkdir(parents=True, exist_ok=True)
+        eval_client = None
+        if not args.skip_eval:
+            eval_client = GracefulRetryClient.from_path(
+                args.eval_oai_config, logger=logger, eval_model=args.eval_model
+            )
         benchmark = OnlineM2WBenchmark(
             data_dir=data_dir,
             eval_method = args.eval_method,
             data_az_url = args.eval_data_url,
-            model_client = GracefulRetryClient.from_path(args.eval_oai_config, logger=logger, eval_model=args.eval_model), task_ids=task_ids)
+            model_client = eval_client,
+            task_ids=task_ids)
 
         mlflow.log_param('subsample', args.subsample)
         mlflow.log_param('processes', args.processes)
@@ -127,9 +136,10 @@ def main():
             processes = args.processes,
             callbacks = [Callback()],
             eval_only = args.eval_only,
+            skip_eval = args.skip_eval,
             max_error_task_retries = args.max_error_task_retries,
             flat_out = args.flat_out,
-            task_scores_file = args.task_scores_file or None)
+            task_scores_file=(None if args.skip_eval else (args.task_scores_file or None)))
 
 
 if __name__ == "__main__":

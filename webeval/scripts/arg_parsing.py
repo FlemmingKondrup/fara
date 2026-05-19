@@ -80,6 +80,7 @@ def _get_base_eval_arg_parser():
         help='List of step budgets to compute step budget scores for (e.g., --step_budgets 5 10 15). All values should be between [1, max_rounds]. If not provided, defaults to [5%%, 10%%, 20%%, 25%%, 30%%, 40%%, 50%%, 60%%, 70%%, 75%%, 80%%, 90%%, 100%%] of max_rounds.'
     )
     parser.add_argument('--eval_only', action='store_true', help='Only evaluate existing results without sampling new trajectories from the model')
+    parser.add_argument('--skip_eval', action='store_true', help='Run agent trajectories only; skip LLM-as-a-judge evaluation (WebJudge)')
     parser.add_argument('--max_error_task_retries', type=int, default=5, help='Maximum number of retries for tasks that fail or abort due to errors (default: 5)')
     parser.add_argument('--save_env_state', action='store_true', help='save_env_state arguments')
     parser.add_argument('--save_task_csv', action='store_true', help='Save detailed task results to CSV file with question, answer, refusal status, and trace information')
@@ -104,6 +105,8 @@ def get_eval_args(benchmark_arg_func):
     ### if both model_url and model_endpoint are set, raise error
     if args.model_url is not None and args.model_endpoint is not None:
         raise ValueError("Only one of --model_url or --model_endpoint can be specified to run evaluation")
+    if args.eval_only and args.skip_eval:
+        raise ValueError("--eval_only and --skip_eval are mutually exclusive")
     if args.async_mlflow:
         mlflow.config.enable_async_logging()
     # create out_url if not exists
