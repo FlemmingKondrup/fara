@@ -101,6 +101,52 @@ def get_foundry_endpoint_configs(endpoint_config_path: str) -> List[Dict]:
     return websurfer_client_cfg
 
 
+def _parse_task_scores_file(path: Path) -> dict[str, str]:
+    """Read existing cumulative task scores from file."""
+    task_scores: dict[str, str] = {}
+    if not path.exists():
+        return task_scores
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or ": " not in line:
+            continue
+        task_id, score = line.split(": ", 1)
+        task_scores[task_id.strip()] = score.strip()
+    return task_scores
+
+
+def _is_successful_task_score(score_str: str) -> bool:
+    try:
+        return float(score_str) == 1.0
+    except ValueError:
+        return False
+
+
+def update_cumulative_task_scores(
+    scores_path: Path,
+    results: List[EvalResult],
+) -> None:
+    """Merge eval results into a cumulative task-scores file at --out_url root."""
+    task_scores = _parse_task_scores_file(scores_path)
+
+    for result in results:
+        if result.score is not None:
+            score_str = str(int(result.score) if result.score == int(result.score) else result.score)
+        else:
+            score_str = "None"
+        task_scores[result.qid] = score_str
+
+    n_successful = sum(1 for score in task_scores.values() if _is_successful_task_score(score))
+    n_total = len(task_scores)
+    success_rate = (n_successful / n_total) if n_total else 0.0
+
+    lines = [f"{n_successful}/{n_total} = {success_rate:.3f}", ""]
+    lines.extend(f"{task_id}: {task_scores[task_id]}" for task_id in sorted(task_scores))
+    scores_path.parent.mkdir(parents=True, exist_ok=True)
+    scores_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 class ModelReference:
     def __init__(self, model_url, model_port, device_id, max_n_images, model_name=None, dtype='auto', enforce_eager=False, use_external_endpoint=False):
         self.model_url_to_start = model_url
@@ -192,7 +238,7 @@ class EvalExp:
         """Clean MLflow keys by replacing unsupported characters, Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), colon(:) and slashes (/)."""
         return ''.join(c if c.isalnum() or c in ['_', '-', '.', ' ', ':', '/'] else '_' for c in key)[:250]
 
-    def run(self, model_ref, system, benchmark, out_url, subsample = 1.0, redo_eval = False, run_id = '0', split = None, processes = -1, callbacks = None,  eval_only = False, max_error_task_retries = 0, flat_out = False):
+    def run(self, model_ref, system, benchmark, out_url, subsample = 1.0, redo_eval = False, run_id = '0', split = None, processes = -1, callbacks = None,  eval_only = False, max_error_task_retries = 0, flat_out = False, task_scores_file = "task_scores.txt"):
         # out_az = AzFolder.from_uri(out_url)
         out_context = Path(out_url).expanduser()
         model_ref.log_2_mlflow()
@@ -245,6 +291,12 @@ class EvalExp:
             metrics = reduce_eval_results(results, benchmark)
             with open(output_folder / benchmark.eval_hash() / 'metrics.json', 'w', encoding='utf-8') as f:
                 json.dump(metrics, f, ensure_ascii=False, indent=2)
+
+            if task_scores_file:
+                cumulative_scores_path = out_context / task_scores_file
+                update_cumulative_task_scores(cumulative_scores_path, results)
+                mlflow.log_param('cumulative_task_scores_file', str(cumulative_scores_path))
+
             # renew_mlflow_token() 
             mlflow_compat_metrics = {k: v for k, v in (metrics or {}).items() if isinstance(v, (int, float, str))}        
             mlflow.log_metrics(mlflow_compat_metrics) 

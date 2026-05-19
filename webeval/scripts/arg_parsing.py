@@ -49,6 +49,12 @@ def _get_base_eval_arg_parser():
         action="store_true",
         help="Write outputs directly under --out_url (traj/ and eval folders) instead of the nested runs/<system>/<model>/<user>/<benchmark>/<run_id>/ layout",
     )
+    parser.add_argument(
+        "--task_scores_file",
+        type=str,
+        default="task_scores.txt",
+        help="Filename at --out_url root for cumulative per-task scores (default: task_scores.txt). Set to empty string to disable.",
+    )
     parser.add_argument("--user", type=str, default=None, help="User name, default: local user name")
     parser.add_argument("--run_id", type=str, default=None, help="run id")
     parser.add_argument("--subsample", type=float, default=1.0, help="Subsample ratio for evaluation")

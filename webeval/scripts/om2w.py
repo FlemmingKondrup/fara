@@ -128,7 +128,8 @@ def main():
             callbacks = [Callback()],
             eval_only = args.eval_only,
             max_error_task_retries = args.max_error_task_retries,
-            flat_out = args.flat_out)
+            flat_out = args.flat_out,
+            task_scores_file = args.task_scores_file or None)
 
 
 if __name__ == "__main__":

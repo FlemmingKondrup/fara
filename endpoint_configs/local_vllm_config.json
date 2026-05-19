@@ -1,5 +1,5 @@
 {
-  "model": "Qwen/Qwen3-VL-4B-Thinking",
+  "model": "/content/downloaded_weights_12",
   "base_url": "http://localhost:5000/v1",
   "api_key": "not-needed"
 }
